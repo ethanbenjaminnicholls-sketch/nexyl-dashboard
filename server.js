@@ -56,7 +56,7 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
-app.get('/api/me', (req, res) => res.json({ user: req.session.user || null }));
+app.get('/{*splat}', (req, res) => { res.json({ user: req.session.user || null }));
 app.get('/api/guilds', (req, res) => res.json({ guilds: req.session.guilds || [] }));
 app.get('/api/logout', (req, res) => req.session.destroy(() => res.redirect('/')));
 
