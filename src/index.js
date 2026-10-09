@@ -23,7 +23,6 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const DISCORD_API = "https://discord.com/api/v10";
 
 app.set("trust proxy", 1);
-
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -47,7 +46,7 @@ app.use(
   })
 );
 
-// Make requests to the Discord API.
+// Discord API helper.
 async function discordFetch(endpoint, options = {}) {
   const response = await fetch(`${DISCORD_API}${endpoint}`, options);
   const body = await response.text();
@@ -61,15 +60,17 @@ async function discordFetch(endpoint, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(`Discord API returned ${response.status}: ${
-      typeof data === "string" ? data : JSON.stringify(data)
-    }`);
+    throw new Error(
+      `Discord API returned ${response.status}: ${
+        typeof data === "string" ? data : JSON.stringify(data)
+      }`
+    );
   }
 
   return data;
 }
 
-// Check whether the user is logged in.
+// Require an authenticated Discord session.
 function requireLogin(req, res, next) {
   if (!req.session.accessToken) {
     return res.status(401).json({ error: "Not authenticated" });
@@ -78,13 +79,7 @@ function requireLogin(req, res, next) {
   next();
 }
 
-// Check Discord administrator permission.
-function isAdministrator(guild) {
-  return (BigInt(guild.permissions || "0") & 8n) === 8n;
-}
-
-// Get servers where the user is an administrator
-// and Nexyl is already installed.
+// Get servers the user can manage where Nexyl is installed.
 async function getManageableGuilds(accessToken) {
   const guilds = await discordFetch("/users/@me/guilds", {
     headers: {
@@ -92,16 +87,24 @@ async function getManageableGuilds(accessToken) {
     }
   });
 
-  const installedGuildIds = new Set(
+  // Use the bot's live guild cache.
+  const botGuildIds = new Set(
     client.guilds.cache.map(guild => guild.id)
   );
 
   return guilds
-    .filter(
-      guild =>
-        isAdministrator(guild) &&
-        installedGuildIds.has(guild.id)
-    )
+    .filter(guild => {
+      const permissions = BigInt(guild.permissions || "0");
+
+      const isOwner = Boolean(guild.owner);
+      const isAdministrator = (permissions & 8n) === 8n;
+      const canManageServer = (permissions & 32n) === 32n;
+
+      return (
+        (isOwner || isAdministrator || canManageServer) &&
+        botGuildIds.has(guild.id)
+      );
+    })
     .map(guild => ({
       id: guild.id,
       name: guild.name,
@@ -123,7 +126,7 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "nexyl" });
 });
 
-// Start Discord OAuth login.
+// Start Discord login.
 app.get("/auth/discord", (_req, res) => {
   const required = [
     "DISCORD_CLIENT_ID",
@@ -148,8 +151,7 @@ app.get("/auth/discord", (_req, res) => {
   );
 });
 
-// Handle the Discord OAuth callback.
-// Both URLs are supported so either redirect path works.
+// Complete Discord login.
 async function discordCallback(req, res) {
   try {
     if (req.query.error) {
@@ -198,7 +200,6 @@ async function discordCallback(req, res) {
 
     req.session.accessToken = token.access_token;
 
-    // Save the session before redirecting to the dashboard.
     req.session.save(error => {
       if (error) {
         console.error("Session save error:", error);
@@ -214,12 +215,12 @@ async function discordCallback(req, res) {
     console.error("Discord OAuth error:", error);
 
     res.status(500).send(
-      "Discord login failed. Check the Render logs and your Discord OAuth settings."
+      "Discord login failed. Check the Render logs and OAuth settings."
     );
   }
 }
 
-// Register both callback paths.
+// Support both callback paths.
 app.get("/auth/callback", discordCallback);
 app.get("/auth/discord/callback", discordCallback);
 
@@ -228,7 +229,6 @@ app.get("/auth/logout", (req, res) => {
   req.session.destroy(error => {
     if (error) {
       console.error("Logout error:", error);
-
       return res.status(500).send("Could not log out.");
     }
 
@@ -237,7 +237,7 @@ app.get("/auth/logout", (req, res) => {
   });
 });
 
-// Dashboard user information.
+// Current Discord user.
 app.get("/api/me", requireLogin, async (req, res) => {
   try {
     const user = await discordFetch("/users/@me", {
@@ -256,8 +256,7 @@ app.get("/api/me", requireLogin, async (req, res) => {
   }
 });
 
-// Servers where the user is an administrator
-// and Nexyl is installed.
+// Manageable servers.
 app.get("/api/guilds", requireLogin, async (req, res) => {
   try {
     res.json(
@@ -272,7 +271,7 @@ app.get("/api/guilds", requireLogin, async (req, res) => {
   }
 });
 
-// Load server settings.
+// Load server configuration.
 app.get(
   "/api/guild/:id/config",
   requireLogin,
@@ -295,7 +294,7 @@ app.get(
   }
 );
 
-// Save server settings.
+// Save server configuration.
 app.put(
   "/api/guild/:id/config",
   requireLogin,
@@ -320,7 +319,7 @@ app.put(
   }
 );
 
-// Load warnings for a user in a server.
+// Load warnings for a user.
 app.get(
   "/api/guild/:id/warnings/:userId",
   requireLogin,
@@ -368,8 +367,7 @@ app.get(
   }
 );
 
-// Serve the browser-side dashboard JavaScript.
-// Do not require this file in Node.js.
+// Browser-side dashboard JavaScript.
 app.get("/dashboard.js", (_req, res) => {
   res.sendFile(path.join(__dirname, "dashboard.js"));
 });
@@ -379,7 +377,7 @@ app.get("/", (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "landing.html"));
 });
 
-// Serve dashboard HTML, CSS, images and other public assets.
+// Serve static website files.
 app.use(express.static(PUBLIC_DIR));
 
 // Start database, web server and bot.
