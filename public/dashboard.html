@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101426"><title>Nexyl Dashboard</title><link rel="stylesheet" href="/style.css"></head>
+<body class="dashboard-page">
+  <header class="dash-topbar"><a class="brand" href="/"><span class="brand-mark">N</span><span>NEXYL</span></a><div class="topbar-actions"><a class="top-link" href="https://discord.gg/Adaq94kmnf" target="_blank" rel="noopener noreferrer">Premium</a><span id="user-name" class="user-name">Loading account…</span><a class="button button-small button-secondary" href="/logout">Log out</a></div></header>
+  <div class="dashboard-layout"><aside class="sidebar"><p class="sidebar-label">WORKSPACE</p><label class="field-label" for="server-select">Your servers</label><select id="server-select"><option value="">Loading servers…</option></select><button id="refresh-servers" class="button button-secondary button-full" type="button">Refresh servers</button><div class="sidebar-divider"></div><p class="sidebar-label">DASHBOARD</p><button class="nav-button active" data-view="overview">Overview</button><button class="nav-button" data-view="settings">Server settings</button><button class="nav-button" data-view="warnings">Warnings</button><button class="nav-button" data-view="logs">Audit logs</button><button class="nav-button" data-view="sessions">Sessions</button><div class="sidebar-bottom"><a href="https://discord.gg/Adaq94kmnf" target="_blank" rel="noopener noreferrer">Nexyl Premium ↗</a><span>Manage your community.</span></div></aside>
+    <main class="main-content"><div id="notice" class="notice hidden" role="status"></div><div id="main-panel"><section class="loading-panel"><div class="spinner"></div><p>Loading your dashboard…</p></section></div></main>
+  </div>
+  <script src="/dashboard.js?v=20261009-2" defer></script>
+</body></html>
