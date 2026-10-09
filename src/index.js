@@ -23,7 +23,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(session({
   name: 'nexyl.sid',
   secret: process.env.SESSION_SECRET || 'local-development-only-change-this-secret',
-  store: new PgSessionStore({ pool: db.pool, tableName: 'nexyl_sessions', createTableIfMissing: true, pruneSessionInterval: 15 * 60 }),
+  store: new PgSessionStore({ pool: db.pool, tableName: 'nexyl_sessions', createTableIfMissing: false, pruneSessionInterval: 15 * 60 }),
   resave: false,
   saveUninitialized: false,
   cookie: { httpOnly: true, secure: IS_PRODUCTION, sameSite: 'lax', maxAge: SESSION_MAX_AGE }
