@@ -1,4 +1,3 @@
-
 const PREMIUM_INVITE = 'https://discord.gg/Adaq94kmnf';
 const $ = (selector) => document.querySelector(selector);
 const panel = $('#main-panel');
@@ -69,6 +68,45 @@ async function listView(guild, type) {
   panel.innerHTML = `${heading(title, isWarnings ? 'Recent warnings recorded by Nexyl.' : 'Recent dashboard and moderation events.')}<section class="panel"><div class="button-row" style="margin-top:0;margin-bottom:16px"><button class="button button-secondary" id="refresh-list">Refresh</button></div>${items.length ? `<div class="data-list">${items.map(item => `<article class="data-item"><strong>${escapeHtml(isWarnings ? (item.user_tag || item.user_id || 'Member warning') : (item.type || 'Event'))}</strong><p>${escapeHtml(isWarnings ? item.reason : item.message)}</p><time>${escapeHtml(item.created_at ? new Date(item.created_at).toLocaleString() : '')}${item.moderator_id || item.actor_id ? ` · Actor: ${escapeHtml(item.moderator_id || item.actor_id)}` : ''}</time></article>`).join('')}</div>` : '<p>No records found for this server yet.</p>'}</section>`;
   $('#refresh-list').addEventListener('click', () => renderView(type));
 }
+async function warningsView(guild) {
+  panel.innerHTML = `${heading('Warnings', 'Configure how Nexyl handles warnings, and review recent warning records.')}<section class="panel"><div class="loading-panel"><div class="spinner"></div><p>Loading warning settings…</p></div></section>`;
+  const [config, rows] = await Promise.all([api(`/api/config/${guild.id}`), api(`/api/warnings/${guild.id}`)]);
+  currentConfig = config || {};
+  const action = ['none', 'kick', 'ban'].includes(currentConfig.warningAction) ? currentConfig.warningAction : 'none';
+  panel.innerHTML = `${heading('Warnings', 'Configure warning notifications and optional automatic actions.')}<form id="warnings-form" class="panel"><h2>Warning system</h2><label class="checkbox-row"><input id="warning-dm" type="checkbox" ${currentConfig.warningDmEnabled !== false ? 'checked' : ''}> Send a direct message to the warned member</label><div class="grid-two"><div class="field"><label for="warning-threshold">Warnings before automatic action (0 disables)</label><input id="warning-threshold" type="number" min="0" max="100" value="${escapeHtml(currentConfig.warningThreshold ?? 0)}"></div><div class="field"><label for="warning-action">Action at threshold</label><select id="warning-action"><option value="none" ${action === 'none' ? 'selected' : ''}>No automatic action</option><option value="kick" ${action === 'kick' ? 'selected' : ''}>Kick member</option><option value="ban" ${action === 'ban' ? 'selected' : ''}>Ban member</option></select></div></div><p class="muted">Automatic kick/ban only runs when enabled, the member reaches the threshold, and Nexyl has the required Discord permissions and role position. Set the threshold to 0 to disable it.</p><div class="button-row"><button class="button" type="submit">Save warning settings</button></div></form><section class="panel"><div class="panel-heading-row"><h2>Recent warnings</h2><span class="pill">${rows.length} records</span></div>${rows.length ? `<div class="data-list">${rows.map(item => `<article class="data-item"><strong>${escapeHtml(item.user_tag || item.user_id || 'Member warning')}</strong><p>${escapeHtml(item.reason || 'No reason provided')}</p><time>${escapeHtml(item.created_at ? new Date(item.created_at).toLocaleString() : '')}${item.moderator_id ? ` · Moderator ID: ${escapeHtml(item.moderator_id)}` : ''}</time></article>`).join('')}</div>` : '<p>No warnings have been recorded for this server yet.</p>'}</section>`;
+  $('#warnings-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const threshold = Number($('#warning-threshold').value);
+    if (!Number.isInteger(threshold) || threshold < 0 || threshold > 100) return showNotice('Threshold must be a whole number from 0 to 100.', 'error');
+    const next = { ...currentConfig, warningDmEnabled: $('#warning-dm').checked, warningThreshold: threshold, warningAction: $('#warning-action').value };
+    try { await api(`/api/config/${guild.id}`, { method: 'PUT', body: JSON.stringify({ config: next }) }); currentConfig = next; showNotice('Warning settings saved.', 'success'); }
+    catch (e) { showNotice(e.message, 'error'); }
+  });
+}
+async function ticketsView(guild) {
+  panel.innerHTML = `${heading('Tickets', 'Set up a private support-ticket system for your Discord server.')}<section class="panel"><div class="loading-panel"><div class="spinner"></div><p>Loading ticket settings…</p></div></section>`;
+  const config = await api(`/api/config/${guild.id}`);
+  currentConfig = config || {};
+  const t = currentConfig.ticketSettings || {};
+  panel.innerHTML = `${heading('Tickets', 'Configure your ticket panel, private channels, and support team.')}<form id="tickets-form" class="panel"><label class="checkbox-row"><input id="tickets-enabled" type="checkbox" ${t.enabled ? 'checked' : ''}> Enable ticket creation</label><div class="grid-two"><div class="field"><label for="ticket-panel-channel">Panel channel ID</label><input id="ticket-panel-channel" value="${escapeHtml(t.panelChannelId || '')}" placeholder="Channel where members open tickets" required></div><div class="field"><label for="ticket-category">Ticket category ID (optional)</label><input id="ticket-category" value="${escapeHtml(t.categoryId || '')}" placeholder="Category for private ticket channels"></div><div class="field"><label for="ticket-support-role">Support role ID (optional)</label><input id="ticket-support-role" value="${escapeHtml(t.supportRoleId || '')}" placeholder="Role that can see tickets"></div><div class="field"><label for="ticket-transcript-channel">Transcript / archive channel ID (optional)</label><input id="ticket-transcript-channel" value="${escapeHtml(t.transcriptChannelId || '')}" placeholder="Reserved for future transcript support"></div></div><div class="field"><label for="ticket-title">Panel title</label><input id="ticket-title" maxlength="256" value="${escapeHtml(t.panelTitle || 'Open a support ticket')}" required></div><div class="field"><label for="ticket-description">Panel description</label><textarea id="ticket-description" maxlength="4000">${escapeHtml(t.panelDescription || 'Click the button below to create a private support ticket.')}</textarea></div><div class="field"><label for="ticket-button-label">Button label</label><input id="ticket-button-label" maxlength="80" value="${escapeHtml(t.buttonLabel || 'Create ticket')}" required></div><p class="muted">Nexyl creates a private channel for each member and adds a Close ticket button. Give the bot Manage Channels and permission to view/send messages in your ticket category. IDs can be copied in Discord with Developer Mode enabled.</p><div class="button-row"><button class="button" type="submit">Save ticket settings</button><button class="button button-secondary" id="publish-ticket-panel" type="button">Publish ticket panel to Discord</button></div></form><section class="panel"><h2>How it works</h2><p>1. Choose a text channel for the public panel and save the settings.</p><p>2. Click <strong>Publish ticket panel to Discord</strong>.</p><p>3. Members click the panel button to create a private ticket. The opener or support staff can close it when finished.</p></section>`;
+  $('#tickets-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const next = { ...currentConfig, ticketSettings: { enabled: $('#tickets-enabled').checked, panelChannelId: $('#ticket-panel-channel').value.trim(), categoryId: $('#ticket-category').value.trim(), supportRoleId: $('#ticket-support-role').value.trim(), transcriptChannelId: $('#ticket-transcript-channel').value.trim(), panelTitle: $('#ticket-title').value.trim(), panelDescription: $('#ticket-description').value.trim(), buttonLabel: $('#ticket-button-label').value.trim() } };
+    if (!next.ticketSettings.panelChannelId) return showNotice('Enter the channel ID where the ticket panel should be posted.', 'error');
+    try { await api(`/api/config/${guild.id}`, { method: 'PUT', body: JSON.stringify({ config: next }) }); currentConfig = next; showNotice('Ticket settings saved.', 'success'); }
+    catch (e) { showNotice(e.message, 'error'); }
+  });
+  $('#publish-ticket-panel').addEventListener('click', async () => {
+    try {
+      const next = { ...currentConfig, ticketSettings: { enabled: $('#tickets-enabled').checked, panelChannelId: $('#ticket-panel-channel').value.trim(), categoryId: $('#ticket-category').value.trim(), supportRoleId: $('#ticket-support-role').value.trim(), transcriptChannelId: $('#ticket-transcript-channel').value.trim(), panelTitle: $('#ticket-title').value.trim(), panelDescription: $('#ticket-description').value.trim(), buttonLabel: $('#ticket-button-label').value.trim() } };
+      await api(`/api/config/${guild.id}`, { method: 'PUT', body: JSON.stringify({ config: next }) });
+      currentConfig = next;
+      const result = await api(`/api/tickets/${guild.id}/panel`, { method: 'POST', body: JSON.stringify({}) });
+      showNotice(`Ticket panel published in #${result.channelName}.`, 'success');
+    } catch (e) { showNotice(e.message, 'error'); }
+  });
+}
+
 async function sessionsView(guild) {
   panel.innerHTML = `${heading('Sessions', 'Save session configuration for this server.')}<section class="panel"><div class="loading-panel"><div class="spinner"></div><p>Loading session settings…</p></div></section>`;
   const data = await api(`/api/session/${guild.id}`);
@@ -90,7 +128,8 @@ async function renderView(view = activeView) {
   if (guild.botInstalled === false) return notInstalledView(guild);
   try {
     if (view === 'settings') return await settingsView(guild);
-    if (view === 'warnings') return await listView(guild, 'warnings');
+    if (view === 'warnings') return await warningsView(guild);
+    if (view === 'tickets') return await ticketsView(guild);
     if (view === 'logs') return await listView(guild, 'logs');
     if (view === 'sessions') return await sessionsView(guild);
     return overviewView(guild);
