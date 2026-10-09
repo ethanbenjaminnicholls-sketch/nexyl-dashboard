@@ -1,0 +1,23 @@
+{
+  "name": "nexyl-dashboard",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Nexyl Discord moderation bot and dashboard",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "check": "node --check src/index.js && node --check src/bot.js && node --check src/db.js && node --check src/dashboard.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "connect-pg-simple": "^10.0.0",
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "pg": "^8.16.0"
+  }
+}
