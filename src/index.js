@@ -98,7 +98,7 @@ app.get("/health", (_req, res) => {
 });
 
 // Discord OAuth login.
-app.get("/auth/discord", (_req, res) => {
+app.get("/auth/callback", async (req, res) => {
   if (
     !process.env.DISCORD_CLIENT_ID ||
     !process.env.DISCORD_REDIRECT_URI
