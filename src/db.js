@@ -47,6 +47,23 @@ async function initDb() {
       data JSONB NOT NULL DEFAULT '{}'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS nexyl_sessions (
+      sid VARCHAR NOT NULL COLLATE "default",
+      sess JSON NOT NULL,
+      expire TIMESTAMP(6) NOT NULL
+    );
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'nexyl_sessions_pkey'
+          AND conrelid = 'nexyl_sessions'::regclass
+      ) THEN
+        ALTER TABLE nexyl_sessions
+          ADD CONSTRAINT nexyl_sessions_pkey PRIMARY KEY (sid);
+      END IF;
+    END $$;
+    CREATE INDEX IF NOT EXISTS nexyl_sessions_expire_idx ON nexyl_sessions (expire);
   `);
 }
 
