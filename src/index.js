@@ -178,6 +178,23 @@ app.post('/api/config/:guildId', loginRequired, requireGuild, async (req, res) =
 });
 app.get('/api/warnings/:guildId', loginRequired, requireGuild, async (req, res) => { try { res.json(await db.getWarnings(req.params.guildId)); } catch (e) { console.error('[WARNINGS]', e.message); res.status(500).json({ error: 'Could not load warnings.' }); } });
 app.get('/api/logs/:guildId', loginRequired, requireGuild, async (req, res) => { try { res.json(await db.getLogs(req.params.guildId)); } catch (e) { console.error('[LOGS]', e.message); res.status(500).json({ error: 'Could not load logs.' }); } });
+app.post('/api/tickets/:guildId/panel', loginRequired, requireGuild, async (req, res) => {
+  try {
+    const config = await db.getConfig(req.params.guildId);
+    const ticket = config.ticketSettings || {};
+    if (!ticket.enabled) return res.status(400).json({ error: 'Enable tickets and save the settings first.' });
+    if (!isSnowflake(String(ticket.panelChannelId || ''))) return res.status(400).json({ error: 'Enter a valid ticket panel channel ID first.' });
+    const guild = client.guilds.cache.get(req.params.guildId);
+    const channel = await guild.channels.fetch(ticket.panelChannelId).catch(() => null);
+    if (!channel?.isTextBased?.() || !channel.send) return res.status(400).json({ error: 'The panel channel could not be found or is not a text channel.' });
+    const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+    const embed = new EmbedBuilder().setColor(0x8b7cff).setTitle(String(ticket.panelTitle || 'Open a support ticket').slice(0, 256)).setDescription(String(ticket.panelDescription || 'Click the button below to create a private support ticket.').slice(0, 4000)).setFooter({ text: 'Nexyl Support' });
+    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('nexyl_ticket_open').setLabel(String(ticket.buttonLabel || 'Create ticket').slice(0, 80)).setStyle(ButtonStyle.Primary));
+    await channel.send({ embeds: [embed], components: [row] });
+    await db.addLog(req.params.guildId, { type: 'tickets', message: `Ticket panel published in #${channel.name}`, actorId: req.session.discordUser.id });
+    res.json({ success: true, channelName: channel.name });
+  } catch (e) { console.error('[TICKET PANEL]', e); res.status(500).json({ error: 'Could not publish the ticket panel. Check Nexyl permissions and Render logs.' }); }
+});
 app.get('/api/session/:guildId', loginRequired, requireGuild, async (req, res) => { try { res.json(await db.getSession(req.params.guildId)); } catch (e) { console.error('[SESSION GET]', e.message); res.status(500).json({ error: 'Could not load session settings.' }); } });
 app.put('/api/session/:guildId', loginRequired, requireGuild, async (req, res) => { try { const data = req.body?.data || {}; res.json({ success: true, data: await db.setSession(req.params.guildId, data) }); } catch (e) { console.error('[SESSION PUT]', e.message); res.status(500).json({ error: 'Could not save session settings.' }); } });
 app.post('/api/session/:guildId', loginRequired, requireGuild, async (req, res) => { try { res.json({ success: true, data: await db.setSession(req.params.guildId, req.body?.data || req.body || {}) }); } catch (e) { console.error('[SESSION POST]', e.message); res.status(500).json({ error: 'Could not save session settings.' }); } });
