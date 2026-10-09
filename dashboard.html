@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#090b12">
+  <meta name="description" content="Manage your Nexyl Discord servers, settings, warnings, and sessions.">
+  <title>Nexyl Workspace</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="dashboard-page">
+  <header class="dash-topbar">
+    <a class="brand" href="/" aria-label="Nexyl home"><span class="brand-mark"><span>N</span></span><span class="brand-word">NEXYL<span class="brand-period">.</span></span></a>
+    <div class="dash-topbar-center"><span class="workspace-dot"></span> COMMUNITY WORKSPACE <span class="topbar-slash">/</span> DASHBOARD</div>
+    <div class="topbar-actions"><a class="premium-top-link" href="https://discord.gg/Adaq94kmnf" target="_blank" rel="noopener noreferrer"><span>✦</span> Premium</a><div class="account-chip"><span class="account-avatar">D</span><span id="user-name" class="user-name">Loading account…</span></div><a class="logout-link" href="/logout" aria-label="Log out" title="Log out"><span>↗</span></a></div>
+  </header>
+  <div class="dashboard-layout">
+    <aside class="sidebar">
+      <div class="sidebar-workspace"><span class="workspace-icon">◈</span><div><small>YOUR WORKSPACE</small><strong>Nexyl Control</strong></div><span class="workspace-chevron">⌄</span></div>
+      <p class="sidebar-label">SERVER</p>
+      <label class="field-label" for="server-select">Selected server</label>
+      <select id="server-select"><option value="">Loading servers…</option></select>
+      <button id="refresh-servers" class="button button-secondary button-full refresh-button" type="button"><span>↻</span> Refresh servers</button>
+      <div class="sidebar-divider"></div>
+      <p class="sidebar-label">MANAGE</p>
+      <button class="nav-button active" data-view="overview"><span class="nav-icon">◈</span><span>Overview</span><span class="nav-current"></span></button>
+      <button class="nav-button" data-view="settings"><span class="nav-icon">⚙</span><span>Server settings</span></button>
+      <button class="nav-button" data-view="warnings"><span class="nav-icon">!</span><span>Warnings</span></button>
+      <button class="nav-button" data-view="logs"><span class="nav-icon">▤</span><span>Audit logs</span></button>
+      <button class="nav-button" data-view="sessions"><span class="nav-icon">◷</span><span>Sessions</span></button>
+      <div class="sidebar-bottom"><div class="premium-card"><div class="premium-card-icon">✦</div><div><strong>Go further with Nexyl</strong><p>Join the community for updates and support.</p><a href="https://discord.gg/Adaq94kmnf" target="_blank" rel="noopener noreferrer">Explore Premium <span>↗</span></a></div></div><div class="sidebar-footer"><span>© <span id="dash-year"></span> Nexyl</span><span class="sidebar-version"><i></i> Workspace</span></div></div>
+    </aside>
+    <main class="main-content"><div class="main-topline"><div><span class="breadcrumb-muted">Workspace</span><span class="breadcrumb-divider">/</span><span>Dashboard</span></div><span class="secure-label"><span>⌑</span> Discord connected workspace</span></div><div id="notice" class="notice hidden" role="status"></div><div id="main-panel"><section class="loading-panel"><div class="spinner"></div><p>Preparing your workspace…</p></section></div></main>
+  </div>
+  <script>document.getElementById('dash-year').textContent = new Date().getFullYear();</script>
+  <script src="/dashboard.js?v=20261009-redesign1" defer></script>
+</body>
+</html>
