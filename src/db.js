@@ -92,6 +92,11 @@ async function addWarning(guildId, data = {}) {
   return rows[0];
 }
 
+async function getWarningsForUser(guildId, userId) {
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM warnings WHERE guild_id = $1 AND user_id = $2', [guildId, userId]);
+  return rows[0]?.count || 0;
+}
+
 async function getWarnings(guildId, limit = 100) {
   const { rows } = await pool.query(
     'SELECT * FROM warnings WHERE guild_id = $1 ORDER BY created_at DESC LIMIT $2',
@@ -130,4 +135,4 @@ async function setSession(guildId, data) {
   return rows[0].data;
 }
 
-module.exports = { pool, initDb, getConfig, setConfig, addWarning, getWarnings, addLog, getLogs, getSession, setSession };
+module.exports = { pool, initDb, getConfig, setConfig, addWarning, getWarnings, getWarningsForUser, addLog, getLogs, getSession, setSession };
