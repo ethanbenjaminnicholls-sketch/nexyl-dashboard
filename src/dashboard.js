@@ -1,3 +1,4 @@
+
 const PREMIUM_INVITE = 'https://discord.gg/Adaq94kmnf';
 const $ = (selector) => document.querySelector(selector);
 const panel = $('#main-panel');
