@@ -195,6 +195,27 @@ app.post('/api/tickets/:guildId/panel', loginRequired, requireGuild, async (req,
     res.json({ success: true, channelName: channel.name });
   } catch (e) { console.error('[TICKET PANEL]', e); res.status(500).json({ error: 'Could not publish the ticket panel. Check Nexyl permissions and Render logs.' }); }
 });
+app.post('/api/verification/:guildId/panel', loginRequired, requireGuild, async (req, res) => {
+  try {
+    const config = await db.getConfig(req.params.guildId);
+    const verification = config.verificationSettings || {};
+    if (!verification.enabled) return res.status(400).json({ error: 'Enable verification and save settings first.' });
+    if (!isSnowflake(String(verification.channelId || '')) || !isSnowflake(String(verification.roleId || ''))) return res.status(400).json({ error: 'Enter valid verification channel and role IDs first.' });
+    const guild = client.guilds.cache.get(req.params.guildId);
+    const channel = await guild.channels.fetch(verification.channelId).catch(() => null);
+    const role = await guild.roles.fetch(verification.roleId).catch(() => null);
+    if (!channel?.isTextBased?.() || !channel.send) return res.status(400).json({ error: 'Verification channel was not found or is not a text channel.' });
+    if (!role) return res.status(400).json({ error: 'The verified member role was not found in this server.' });
+    const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+    const botMember = guild.members.me;
+    if (!botMember?.permissions.has(PermissionFlagsBits.ManageRoles) || role.position >= botMember.roles.highest.position) return res.status(400).json({ error: 'Give Nexyl Manage Roles permission and move its bot role above the verified role.' });
+    const embed = new EmbedBuilder().setColor(0x8b7cff).setTitle(String(verification.title || 'Verify your account').slice(0, 256)).setDescription(String(verification.description || 'Click the button below to receive the verified member role.').slice(0, 3000)).setFooter({ text: 'Nexyl Verification' });
+    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('nexyl_verify_member').setLabel('Verify').setStyle(ButtonStyle.Success));
+    await channel.send({ embeds: [embed], components: [row] });
+    await db.addLog(req.params.guildId, { type: 'verification', message: `Verification panel published in #${channel.name}`, actorId: req.session.discordUser.id });
+    res.json({ success: true, channelName: channel.name });
+  } catch (e) { console.error('[VERIFY PANEL]', e); res.status(500).json({ error: 'Could not publish the verification panel. Check Nexyl permissions and Render logs.' }); }
+});
 app.get('/api/session/:guildId', loginRequired, requireGuild, async (req, res) => { try { res.json(await db.getSession(req.params.guildId)); } catch (e) { console.error('[SESSION GET]', e.message); res.status(500).json({ error: 'Could not load session settings.' }); } });
 app.put('/api/session/:guildId', loginRequired, requireGuild, async (req, res) => { try { const data = req.body?.data || {}; res.json({ success: true, data: await db.setSession(req.params.guildId, data) }); } catch (e) { console.error('[SESSION PUT]', e.message); res.status(500).json({ error: 'Could not save session settings.' }); } });
 app.post('/api/session/:guildId', loginRequired, requireGuild, async (req, res) => { try { res.json({ success: true, data: await db.setSession(req.params.guildId, req.body?.data || req.body || {}) }); } catch (e) { console.error('[SESSION POST]', e.message); res.status(500).json({ error: 'Could not save session settings.' }); } });
@@ -214,3 +235,4 @@ async function start() {
 }
 if (require.main === module) start();
 module.exports = app;
+
