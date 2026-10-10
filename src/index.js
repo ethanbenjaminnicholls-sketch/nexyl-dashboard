@@ -20,6 +20,15 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+// Log failing API responses to Render logs for easier dashboard troubleshooting.
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    if (req.path.startsWith('/api/') && res.statusCode >= 400) {
+      console.error(`[API ${res.statusCode}] ${req.method} ${req.path}`);
+    }
+  });
+  next();
+});
 app.use(session({
   name: 'nexyl.sid',
   secret: process.env.SESSION_SECRET || 'local-development-only-change-this-secret',
@@ -235,4 +244,3 @@ async function start() {
 }
 if (require.main === module) start();
 module.exports = app;
-
