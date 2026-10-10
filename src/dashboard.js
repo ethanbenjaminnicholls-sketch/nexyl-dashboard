@@ -22,6 +22,8 @@ async function api(url, options = {}) {
   const data = await response.json().catch(() => ({}));
   if (response.status === 401) { window.location.href = '/auth/discord'; throw new Error('Please sign in again.'); }
   if (!response.ok) {
+    // Expose failed API calls in DevTools so errors are diagnosable instead of silent.
+    console.error('[NEXYL DASHBOARD API]', { url, status: response.status, response: data });
     if (response.status === 409 && data.addBotUrl) showNotice(`${data.error} Use the Add Nexyl button on this server.`, 'error');
     throw new Error(data.error || `Request failed (${response.status}).`);
   }
@@ -179,7 +181,9 @@ async function renderView(view = activeView) {
     if (view === 'sessions') return await sessionsView(guild);
     return overviewView(guild);
   } catch (e) {
-    panel.innerHTML = `${heading('Something went wrong', 'The dashboard could not load this section.')}<section class="empty-state"><p>${escapeHtml(e.message)}</p><button id="retry-view" class="button">Try again</button></section>`;
+    // This catch previously hid the exception from DevTools, leaving only a generic message.
+    console.error(`[NEXYL DASHBOARD VIEW] Failed to render \"${view}\"`, e);
+    panel.innerHTML = `${heading('Something went wrong', 'The dashboard could not load this section.')}<section class="empty-state"><p>${escapeHtml(e?.message || 'Unknown dashboard error.')}</p><button id="retry-view" class="button">Try again</button></section>`;
     $('#retry-view')?.addEventListener('click', () => renderView(view));
   }
 }
