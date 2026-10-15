@@ -22,9 +22,10 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 // Log failing API responses to Render logs for easier dashboard troubleshooting.
 app.use((req, res, next) => {
+  const startedAt = Date.now();
   res.on('finish', () => {
     if (req.path.startsWith('/api/') && res.statusCode >= 400) {
-      console.error(`[API ${res.statusCode}] ${req.method} ${req.path}`);
+      console.error(`[API ${res.statusCode}] ${req.method} ${req.path} (${Date.now() - startedAt}ms)`);
     }
   });
   next();
@@ -100,7 +101,17 @@ async function requireGuild(req, res, next) {
     if (!guild.botInstalled) return res.status(409).json({ error: 'Nexyl is not installed in this server yet.', botInstalled: false, addBotUrl: `/auth/add-bot?guild_id=${id}` });
     req.guild = guild;
     next();
-  } catch (e) { console.error('[AUTH] Guild check:', e.message); res.status(e.status || 500).json({ error: 'Could not verify server permissions. Please sign in again.' }); }
+  } catch (e) {
+    console.error('[AUTH] Guild check:', e.stack || e);
+    const status = e.status || 500;
+    res.status(status).json({
+      error: status === 401
+        ? 'Your Discord session expired. Sign in again.'
+        : status === 403
+          ? 'You need Administrator or Manage Server permission for this server.'
+          : 'Could not verify server permissions. Refresh the page, then sign in again if it keeps happening.'
+    });
+  }
 }
 
 app.get('/', (req, res) => { res.set('Cache-Control', 'no-store'); res.sendFile(path.join(PUBLIC_DIR, 'landing.html')); });
@@ -177,7 +188,12 @@ app.put('/api/config/:guildId', loginRequired, requireGuild, async (req, res) =>
     if (config.prefix !== undefined && (typeof config.prefix !== 'string' || !config.prefix.trim() || config.prefix.trim().length > 5 || /\s/.test(config.prefix))) return res.status(400).json({ error: 'The command prefix must be 1–5 characters with no spaces.' });
     if (config.logChannelId !== undefined && config.logChannelId !== '' && !isSnowflake(String(config.logChannelId))) return res.status(400).json({ error: 'Log channel ID must be a valid Discord channel ID.' });
     const saved = await db.setConfig(req.params.guildId, { ...config, prefix: (config.prefix || '!').trim(), logChannelId: config.logChannelId || '' });
-    await db.addLog(req.params.guildId, { type: 'settings', message: 'Dashboard settings updated', actorId: req.session.discordUser.id });
+    // A non-critical audit-log failure must not make a successful save look failed.
+    try {
+      await db.addLog(req.params.guildId, { type: 'settings', message: 'Dashboard settings updated', actorId: req.session.discordUser.id });
+    } catch (logError) {
+      console.error('[CONFIG PUT] Settings saved, but audit logging failed:', logError.message);
+    }
     res.json({ success: true, config: saved });
   } catch (e) { console.error('[CONFIG PUT]', e.message); res.status(500).json({ error: 'Could not save settings.' }); }
 });
@@ -200,7 +216,11 @@ app.post('/api/tickets/:guildId/panel', loginRequired, requireGuild, async (req,
     const embed = new EmbedBuilder().setColor(0x8b7cff).setTitle(String(ticket.panelTitle || 'Open a support ticket').slice(0, 256)).setDescription(String(ticket.panelDescription || 'Click the button below to create a private support ticket.').slice(0, 4000)).setFooter({ text: 'Nexyl Support' });
     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('nexyl_ticket_open').setLabel(String(ticket.buttonLabel || 'Create ticket').slice(0, 80)).setStyle(ButtonStyle.Primary));
     await channel.send({ embeds: [embed], components: [row] });
-    await db.addLog(req.params.guildId, { type: 'tickets', message: `Ticket panel published in #${channel.name}`, actorId: req.session.discordUser.id });
+    try {
+      await db.addLog(req.params.guildId, { type: 'tickets', message: `Ticket panel published in #${channel.name}`, actorId: req.session.discordUser.id });
+    } catch (logError) {
+      console.error('[TICKET PANEL] Panel published, but audit logging failed:', logError.message);
+    }
     res.json({ success: true, channelName: channel.name });
   } catch (e) { console.error('[TICKET PANEL]', e); res.status(500).json({ error: 'Could not publish the ticket panel. Check Nexyl permissions and Render logs.' }); }
 });
@@ -221,7 +241,11 @@ app.post('/api/verification/:guildId/panel', loginRequired, requireGuild, async 
     const embed = new EmbedBuilder().setColor(0x8b7cff).setTitle(String(verification.title || 'Verify your account').slice(0, 256)).setDescription(String(verification.description || 'Click the button below to receive the verified member role.').slice(0, 3000)).setFooter({ text: 'Nexyl Verification' });
     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('nexyl_verify_member').setLabel('Verify').setStyle(ButtonStyle.Success));
     await channel.send({ embeds: [embed], components: [row] });
-    await db.addLog(req.params.guildId, { type: 'verification', message: `Verification panel published in #${channel.name}`, actorId: req.session.discordUser.id });
+    try {
+      await db.addLog(req.params.guildId, { type: 'verification', message: `Verification panel published in #${channel.name}`, actorId: req.session.discordUser.id });
+    } catch (logError) {
+      console.error('[VERIFY PANEL] Panel published, but audit logging failed:', logError.message);
+    }
     res.json({ success: true, channelName: channel.name });
   } catch (e) { console.error('[VERIFY PANEL]', e); res.status(500).json({ error: 'Could not publish the verification panel. Check Nexyl permissions and Render logs.' }); }
 });
@@ -230,7 +254,21 @@ app.put('/api/session/:guildId', loginRequired, requireGuild, async (req, res) =
 app.post('/api/session/:guildId', loginRequired, requireGuild, async (req, res) => { try { res.json({ success: true, data: await db.setSession(req.params.guildId, req.body?.data || req.body || {}) }); } catch (e) { console.error('[SESSION POST]', e.message); res.status(500).json({ error: 'Could not save session settings.' }); } });
 app.get('/api/premium', (req, res) => res.json({ invite: PREMIUM_INVITE }));
 app.get('/health', (req, res) => res.json({ status: 'ok', botReady: client.isReady(), uptime: Math.floor(process.uptime()) }));
-app.use((err, req, res, next) => { console.error('[EXPRESS]', err); if (res.headersSent) return next(err); res.status(500).json({ error: 'Unexpected server error.' }); });
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const requestId = crypto.randomBytes(5).toString('hex');
+  console.error(`[EXPRESS ${requestId}] ${req.method} ${req.originalUrl}:`, err?.stack || err);
+  if (req.path.startsWith('/api/')) {
+    const status = Number(err?.status || err?.statusCode) || 500;
+    return res.status(status).json({
+      error: status === 413 ? 'The submitted data is too large.' :
+        status === 400 ? 'The request data was invalid. Check the fields and try again.' :
+        'The server hit an unexpected error. Please try once more; if it repeats, give support this reference.',
+      reference: requestId
+    });
+  }
+  res.status(500).send(`Nexyl could not complete this request. Reference: ${requestId}`);
+});
 
 async function start() {
   if (IS_PRODUCTION && !process.env.SESSION_SECRET) {
