@@ -18,14 +18,39 @@ function showNotice(message, type = '') {
 }
 function hideNotice() { notice.classList.add('hidden'); }
 async function api(url, options = {}) {
-  const response = await fetch(url, { credentials: 'same-origin', ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) } });
-  const data = await response.json().catch(() => ({}));
-  if (response.status === 401) { window.location.href = '/auth/discord'; throw new Error('Please sign in again.'); }
+  let response;
+  try {
+    response = await fetch(url, {
+      credentials: 'same-origin',
+      ...options,
+      headers: {
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers || {})
+      }
+    });
+  } catch (networkError) {
+    console.error('[NEXYL DASHBOARD NETWORK]', url, networkError);
+    throw new Error('Could not connect to Nexyl. Check your internet connection and refresh the page.');
+  }
+  const contentType = response.headers.get('content-type') || '';
+  let data;
+  if (contentType.includes('application/json')) {
+    data = await response.json().catch(() => ({}));
+  } else {
+    const text = await response.text().catch(() => '');
+    data = { error: text.slice(0, 250) || `The server returned an unexpected response (${response.status}).` };
+  }
+  if (response.status === 401) {
+    window.location.href = '/auth/discord';
+    throw new Error(data.error || 'Your Discord login expired. Sign in again.');
+  }
   if (!response.ok) {
-    // Expose failed API calls in DevTools so errors are diagnosable instead of silent.
-    console.error('[NEXYL DASHBOARD API]', { url, status: response.status, response: data });
+    console.error('[NEXYL DASHBOARD API]', {
+      url, method: options.method || 'GET', status: response.status, response: data
+    });
     if (response.status === 409 && data.addBotUrl) showNotice(`${data.error} Use the Add Nexyl button on this server.`, 'error');
-    throw new Error(data.error || `Request failed (${response.status}).`);
+    const reference = data.reference ? ` (reference: ${data.reference})` : '';
+    throw new Error(`${data.error || `Request failed (${response.status})`}${reference}`);
   }
   return data;
 }
@@ -216,3 +241,12 @@ serverSelect.addEventListener('change', () => { selectedGuildId = serverSelect.v
 $('#refresh-servers').addEventListener('click', loadGuilds);
 document.querySelectorAll('.nav-button').forEach(button => button.addEventListener('click', () => renderView(button.dataset.view)));
 loadGuilds();
+
+
+// Unexpected browser-side failures are logged with enough context to diagnose them.
+window.addEventListener('error', event => {
+  console.error('[NEXYL DASHBOARD JS]', event.error || event.message);
+});
+window.addEventListener('unhandledrejection', event => {
+  console.error('[NEXYL DASHBOARD ASYNC]', event.reason);
+});
